@@ -1,0 +1,14 @@
+{
+    "telemetry.telemetryLevel": "off",
+    "editor.fontFamily": "Cascadia Mono",
+    "editor.guides.indentation": false,
+    "editor.minimap.showSlider": "always",
+    "editor.minimap.size": "fit",
+    "editor.renderWhitespace": "boundary",
+    "workbench.colorTheme": "Visual Studio Light - C++",
+    "window.commandCenter": false,
+    "files.eol": "\n",
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true
+}
