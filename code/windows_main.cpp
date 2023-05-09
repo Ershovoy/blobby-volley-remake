@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 typedef double DOUBLE;
+#include <gl/GL.h>
 
 #include "windows_main.h"
 
@@ -134,6 +135,30 @@ LONG64 GetCounterFrequency()
     return counterFrequency.QuadPart;
 }
 
+BOOL InitializeOpenGL(HDC deviceContext)
+{
+    PIXELFORMATDESCRIPTOR desiredPixelFormat = {};
+    desiredPixelFormat.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+    desiredPixelFormat.nVersion = 1;
+    desiredPixelFormat.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    desiredPixelFormat.iPixelType = PFD_TYPE_RGBA;
+    desiredPixelFormat.cColorBits = 32;
+    desiredPixelFormat.cAlphaBits = 8;
+
+    int suggestedPixelFormatIndex = ChoosePixelFormat(deviceContext, &desiredPixelFormat);
+    PIXELFORMATDESCRIPTOR suggestedPixelFormat;
+    if (!DescribePixelFormat(deviceContext, suggestedPixelFormatIndex, sizeof(PIXELFORMATDESCRIPTOR), &suggestedPixelFormat))
+        return FALSE;
+
+    if (!SetPixelFormat(deviceContext, suggestedPixelFormatIndex, &suggestedPixelFormat))
+        return FALSE;
+
+    HGLRC openGlRenderingContext = wglCreateContext(deviceContext);
+    wglMakeCurrent(deviceContext, openGlRenderingContext);
+
+    return TRUE;
+}
+
 LRESULT CALLBACK WindowProcedure(_In_ HWND   window,
                                  _In_ UINT   message,
                                  _In_ WPARAM wParam,
@@ -262,6 +287,11 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
     {
         HDC deviceContext = GetDC(window);
 
+#if 0
+        if (!InitializeOpenGL(deviceContext))
+            return -1;
+#endif
+
         OffscreenBufferWrapper offscreenWrapper = ResizeOffscreenBuffer(window);
         global_shared_data.offscreen = offscreenWrapper.offscreen;
 #if BUILD_DEBUG
@@ -325,7 +355,12 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
                           0, 0, offscreenWrapper.offscreen.width, offscreenWrapper.offscreen.height,
                           offscreenWrapper.offscreen.memory, &offscreenWrapper.info,
                           DIB_RGB_COLORS, SRCCOPY);
-
+#if 0
+            glViewport(0, 0, WINDOW_CLIENT_WIDTH, WINDOW_CLIENT_HEIGHT);
+            glClearColor(1.0f, 0.0f, 1.0, 0.5f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            SwapBuffers(deviceContext);
+#endif
             Sleep(1);
         }
     }
