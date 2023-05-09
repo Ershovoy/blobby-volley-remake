@@ -1,5 +1,3 @@
-//#include "build_configuration.h"
-
 #if BUILD_DEBUG
 #include "game.h"
 #endif

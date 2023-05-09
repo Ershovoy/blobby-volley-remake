@@ -213,15 +213,8 @@ LRESULT CALLBACK WindowProcedure(_In_ HWND   window,
     return result;
 }
 
-int WINAPI wWinMain(_In_     HINSTANCE instance,
-                    _In_opt_ HINSTANCE previousInstance,
-                    _In_     LPWSTR    lpCmdLine,
-                    _In_     int       nShowCmd)
+HWND InitializeWindow(HINSTANCE instance)
 {
-#if BUILD_DEBUG
-    LoadGameCode();
-    FILETIME previousFileWriteTime = GetLastFileWriteTime(GlobalGameDllName);
-#endif
     WNDCLASSEXW windowClass = {};
     windowClass.cbSize        = sizeof(WNDCLASSEXW);
     windowClass.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -250,6 +243,21 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
                                   windowClass.lpszClassName, windowStyle,
                                   CW_USEDEFAULT, CW_USEDEFAULT, requiredWindowWidth, requiredWindowHeight,
                                   NULL, NULL, instance, NULL);
+
+    return window;
+}
+
+int WINAPI wWinMain(_In_     HINSTANCE instance,
+                    _In_opt_ HINSTANCE previousInstance,
+                    _In_     LPWSTR    lpCmdLine,
+                    _In_     int       nShowCmd)
+{
+#if BUILD_DEBUG
+    LoadGameCode();
+    FILETIME previousFileWriteTime = GetLastFileWriteTime(GlobalGameDllName);
+#endif
+
+    HWND window = InitializeWindow(instance);
     if (window)
     {
         HDC deviceContext = GetDC(window);
