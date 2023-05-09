@@ -281,7 +281,7 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
         DOUBLE secondsPerUpdate = 1.0 / 60.0;
 
         LONG64 previousCounter = GetCounter();
-        DOUBLE secondsElapsed = 0.0;
+        DOUBLE accumulator = 0.0;
 
         // TODO: Launch the game in seperate from window thread, so its update/render function won't freeze after focus lost.
         GlobalIsRunning = initialize_game(global_shared_data);
@@ -306,19 +306,20 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
             LONG64 counterElapsed = currentCounter - previousCounter;
             if (!GlobalIsPause)
             {
-                secondsElapsed += (DOUBLE)counterElapsed / perfomanceCounterFrequency;
+                DOUBLE secondsElapsed = (DOUBLE)counterElapsed / perfomanceCounterFrequency;
+                accumulator += secondsElapsed;
             }
             previousCounter = currentCounter;
-            while (secondsElapsed >= secondsPerUpdate)
+            while (accumulator >= secondsPerUpdate)
             {
                 update_game(global_shared_data);
-                render_game(global_shared_data);
 
-                // TODO: On slow hardware game update function won't run at requiring speed.
-                //       So on fast hardware game update 30 times per second, but on slow 10 times (for example).
-                secondsElapsed -= secondsPerUpdate;
+                accumulator -= secondsPerUpdate;
+                if (accumulator < secondsPerUpdate)
+                {
+                    render_game(global_shared_data);
+                }
             }
-
             StretchDIBits(deviceContext,
                           0, 0, WINDOW_CLIENT_WIDTH, WINDOW_CLIENT_HEIGHT,
                           0, 0, offscreenWrapper.offscreen.width, offscreenWrapper.offscreen.height,
