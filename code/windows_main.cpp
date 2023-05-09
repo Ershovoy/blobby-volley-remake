@@ -79,6 +79,23 @@ bool32 WriteFile(char16* file_name, File file)
     return result;
 }
 
+struct WaveHeader
+{
+    char8 riffId[4];
+    uint32 waveHeaderSize;
+    char8 waveId[4];
+    char8 fmtId[4];
+    uint32 fmtSize;
+    uint16 audioFormat;
+    uint16 numChannels;
+    uint32 sampleRate;
+    uint32 bytesPerSecond;
+    uint16 blockAlign;
+    uint16 bitsPerSample;
+    char8 dataId[4];
+    uint32 dataSize;
+};
+
 FILETIME GetLastFileWriteTime(WCHAR* fileName)
 {
     FILETIME lastFileWriteTime = {};
@@ -272,6 +289,30 @@ HWND InitializeWindow(HINSTANCE instance)
     return window;
 }
 
+AudioManager InitializeAudioManager()
+{
+        AudioManager result = {};
+
+        if (FAILED(XAudio2Create(&result.xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR)))
+            return result;
+
+        if (FAILED(result.xAudio2->CreateMasteringVoice(&result.masterVoice)))
+            return result;
+
+        WAVEFORMATEX waveFormat = {};
+        waveFormat.wFormatTag      = WAVE_FORMAT_PCM;
+        waveFormat.nChannels       = 2;
+        waveFormat.nSamplesPerSec  = 48000;
+        waveFormat.wBitsPerSample  = 16;
+        waveFormat.nBlockAlign     = (waveFormat.nChannels * waveFormat.wBitsPerSample) / 8;
+        waveFormat.nAvgBytesPerSec = waveFormat.nSamplesPerSec * waveFormat.nBlockAlign;
+        waveFormat.cbSize          = 0;
+
+        result.waveFormat = waveFormat;
+        result.isInitialized = true;
+        return result;
+}
+
 int WINAPI wWinMain(_In_     HINSTANCE instance,
                     _In_opt_ HINSTANCE previousInstance,
                     _In_     LPWSTR    lpCmdLine,
@@ -286,6 +327,33 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
     if (window)
     {
         HDC deviceContext = GetDC(window);
+
+        GlobalAudioManager = InitializeAudioManager();
+        if (!GlobalAudioManager.isInitialized)
+            return -1;
+
+        IXAudio2SourceVoice* SourceVoice;
+
+        if (FAILED(GlobalAudioManager.xAudio2->CreateSourceVoice(&SourceVoice, &GlobalAudioManager.waveFormat)))
+            return -1;
+
+        File soundFile = DebugReadFile(L"sample.wav");
+        if (soundFile.memory == 0)
+            return -1;
+
+        WaveHeader* waveHeader = (WaveHeader*)soundFile.memory;
+
+        XAUDIO2_BUFFER audioBuffer = {};
+        audioBuffer.AudioBytes = waveHeader->dataSize;
+        audioBuffer.pAudioData = (BYTE*)(waveHeader + 1);
+        audioBuffer.Flags      = 0;
+        audioBuffer.LoopCount  = XAUDIO2_LOOP_INFINITE;
+
+        if (FAILED(SourceVoice->SubmitSourceBuffer(&audioBuffer)))
+            return -1;
+
+        if (FAILED(SourceVoice->Start()))
+            return -1;
 
 #if 0
         if (!InitializeOpenGL(deviceContext))
