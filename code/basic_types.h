@@ -1,10 +1,16 @@
 #include <stdint.h>
 
+#if BUILD_DEBUG
+#define Assert(expression) if(!(expression)) { *(int*)0 = 0; }
+#else
+#define Assert(expression)
+#endif
+
 #define function static
 #define global   static
 #define local    static
 
-typedef int32_t bool32;
+typedef uint32_t bool32;
 
 typedef int8_t  int8;
 typedef int16_t int16;

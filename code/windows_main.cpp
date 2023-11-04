@@ -1,6 +1,7 @@
 #define VC_EXTRALEAN
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <xaudio2.h>
 typedef double DOUBLE;
 #include <gl/GL.h>
 
@@ -51,8 +52,8 @@ File ReadFile(char16* file_name)
             if (!(ReadFile(fileHandle, result.memory, fileSize, (LPDWORD)&result.size, 0) &&
                   ((uint32)result.size == fileSize)))
             {
-                result = {};
                 VirtualFree(result.memory, 0, MEM_RELEASE);
+                result = {};
             }
         }
     }
@@ -329,36 +330,36 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
         HDC deviceContext = GetDC(window);
 
         GlobalAudioManager = InitializeAudioManager();
-        if (!GlobalAudioManager.isInitialized)
-            return -1;
+        if (GlobalAudioManager.isInitialized)
+        {
+            IXAudio2SourceVoice* SourceVoice;
 
-        IXAudio2SourceVoice* SourceVoice;
+            if (FAILED(GlobalAudioManager.xAudio2->CreateSourceVoice(&SourceVoice, &GlobalAudioManager.waveFormat)))
+                return -1;
 
-        if (FAILED(GlobalAudioManager.xAudio2->CreateSourceVoice(&SourceVoice, &GlobalAudioManager.waveFormat)))
-            return -1;
+            File soundFile = ReadFile(L"sample.wav");
+            if (!soundFile.memory)
+                return -1;
 
-        File soundFile = DebugReadFile(L"sample.wav");
-        if (soundFile.memory == 0)
-            return -1;
+            WaveHeader* waveHeader = (WaveHeader*)soundFile.memory;
 
-        WaveHeader* waveHeader = (WaveHeader*)soundFile.memory;
+            XAUDIO2_BUFFER audioBuffer = {};
+            audioBuffer.AudioBytes = waveHeader->dataSize;
+            audioBuffer.pAudioData = (BYTE*)(waveHeader + sizeof(WaveHeader));
+            audioBuffer.Flags = 0;
+            audioBuffer.LoopCount = XAUDIO2_LOOP_INFINITE;
 
-        XAUDIO2_BUFFER audioBuffer = {};
-        audioBuffer.AudioBytes = waveHeader->dataSize;
-        audioBuffer.pAudioData = (BYTE*)(waveHeader + 1);
-        audioBuffer.Flags      = 0;
-        audioBuffer.LoopCount  = XAUDIO2_LOOP_INFINITE;
+            if (FAILED(SourceVoice->SubmitSourceBuffer(&audioBuffer)))
+                return -1;
 
-        if (FAILED(SourceVoice->SubmitSourceBuffer(&audioBuffer)))
-            return -1;
+            if (FAILED(SourceVoice->Start()))
+                return -1;
 
-        if (FAILED(SourceVoice->Start()))
-            return -1;
+            SourceVoice->SetVolume(0.25f);
+        }
 
-#if 0
         if (!InitializeOpenGL(deviceContext))
             return -1;
-#endif
 
         OffscreenBufferWrapper offscreenWrapper = ResizeOffscreenBuffer(window);
         global_shared_data.offscreen = offscreenWrapper.offscreen;
