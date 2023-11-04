@@ -127,7 +127,7 @@ OffscreenBufferWrapper ResizeOffscreenBuffer(HWND window)
     OffscreenBuffer offscreen = {};
     offscreen.width      = clientWidth;
     offscreen.height     = clientHeight;
-    offscreen.pixel_size = bitmapInfo.bmiHeader.biBitCount / 4;
+    offscreen.pixel_size = bitmapInfo.bmiHeader.biBitCount / 8;
     offscreen.size       = clientWidth * clientHeight * offscreen.pixel_size;
     offscreen.memory     = VirtualAlloc(0, (SIZE_T)offscreen.size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
