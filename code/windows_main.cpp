@@ -1,11 +1,13 @@
 #define VC_EXTRALEAN
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #include <xaudio2.h>
 typedef double DOUBLE;
 #include <gl/GL.h>
+#include <gl/GLU.h>
 
 #include "windows_main.h"
+#include "windows_opengl.cpp"
 
 #if BUILD_DEBUG
 void UnloadGameCode()
@@ -33,7 +35,24 @@ void LoadGameCode()
 #include "game.cpp"
 #endif
 
-File ReadFile(char16* file_name)
+int32 GetFileSize(char16* file_name)
+{
+    int32 result = {};
+
+    HANDLE fileHandle = CreateFileW(file_name, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if (fileHandle == INVALID_HANDLE_VALUE)
+        return result;
+
+    DWORD fileSize = GetFileSize(fileHandle, NULL);
+    if(fileSize != INVALID_FILE_SIZE)
+    {
+        result = fileSize;
+    }
+
+    return result;
+}
+
+File DebugReadFile(char16* file_name)
 {
     File result = {};
 
@@ -55,6 +74,34 @@ File ReadFile(char16* file_name)
                 VirtualFree(result.memory, 0, MEM_RELEASE);
                 result = {};
             }
+        }
+    }
+
+    CloseHandle(fileHandle);
+    return result;
+}
+
+bool32 ReadFile(char16* file_name, File* file)
+{
+    bool32 result = false;
+
+    HANDLE fileHandle = CreateFileW(file_name, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if (fileHandle == INVALID_HANDLE_VALUE)
+        return result;
+
+    DWORD fileSize = GetFileSize(fileHandle, NULL);
+    if (fileSize != INVALID_FILE_SIZE)
+    {
+        // TODO: Read file function can read maximum 2048 megabytes, due to size of its third parameter.
+        //       How can we get around it?
+        if (!(ReadFile(fileHandle, file->memory, fileSize, (LPDWORD)&file->size, 0) &&
+            ((uint32)file->size == fileSize)))
+        {
+            result = false;
+        }
+        else
+        {
+            result = true;
         }
     }
 
@@ -110,12 +157,16 @@ FILETIME GetLastFileWriteTime(WCHAR* fileName)
     return lastFileWriteTime;
 }
 
-OffscreenBufferWrapper ResizeOffscreenBuffer(HWND window)
+void ResizeOffscreenBuffer(OffscreenBufferWrapper* offscreenWrapper,
+                                                   int width, int height)
 {
-    RECT clientRectangle;
-    GetClientRect(window, &clientRectangle);
-    LONG clientWidth  = BASE_RENDER_RESOLUSION_WIDTH;
-    LONG clientHeight = BASE_RENDER_RESOLUSION_HEIGHT;
+    if(offscreenWrapper->offscreen.memory)
+    {
+        VirtualFree(offscreenWrapper->offscreen.memory, 0, MEM_RELEASE);
+    }
+
+    LONG clientWidth  = (LONG)width;
+    LONG clientHeight = (LONG)height;
 
     BITMAPINFO bitmapInfo = {};
     bitmapInfo.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
@@ -125,6 +176,8 @@ OffscreenBufferWrapper ResizeOffscreenBuffer(HWND window)
     bitmapInfo.bmiHeader.biBitCount    = 32;
     bitmapInfo.bmiHeader.biCompression = BI_RGB;
 
+    offscreenWrapper->info = bitmapInfo;
+
     OffscreenBuffer offscreen = {};
     offscreen.width      = clientWidth;
     offscreen.height     = clientHeight;
@@ -132,11 +185,7 @@ OffscreenBufferWrapper ResizeOffscreenBuffer(HWND window)
     offscreen.size       = clientWidth * clientHeight * offscreen.pixel_size;
     offscreen.memory     = VirtualAlloc(0, (SIZE_T)offscreen.size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
-    OffscreenBufferWrapper result = {};
-    result.info      = bitmapInfo;
-    result.offscreen = offscreen;
-
-    return result;
+    offscreenWrapper->offscreen = offscreen;
 }
 
 LONG64 GetCounter()
@@ -151,30 +200,6 @@ LONG64 GetCounterFrequency()
     LARGE_INTEGER counterFrequency;
     QueryPerformanceFrequency(&counterFrequency);
     return counterFrequency.QuadPart;
-}
-
-BOOL InitializeOpenGL(HDC deviceContext)
-{
-    PIXELFORMATDESCRIPTOR desiredPixelFormat = {};
-    desiredPixelFormat.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-    desiredPixelFormat.nVersion = 1;
-    desiredPixelFormat.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    desiredPixelFormat.iPixelType = PFD_TYPE_RGBA;
-    desiredPixelFormat.cColorBits = 32;
-    desiredPixelFormat.cAlphaBits = 8;
-
-    int suggestedPixelFormatIndex = ChoosePixelFormat(deviceContext, &desiredPixelFormat);
-    PIXELFORMATDESCRIPTOR suggestedPixelFormat;
-    if (!DescribePixelFormat(deviceContext, suggestedPixelFormatIndex, sizeof(PIXELFORMATDESCRIPTOR), &suggestedPixelFormat))
-        return FALSE;
-
-    if (!SetPixelFormat(deviceContext, suggestedPixelFormatIndex, &suggestedPixelFormat))
-        return FALSE;
-
-    HGLRC openGlRenderingContext = wglCreateContext(deviceContext);
-    wglMakeCurrent(deviceContext, openGlRenderingContext);
-
-    return TRUE;
 }
 
 LRESULT CALLBACK WindowProcedure(_In_ HWND   window,
@@ -204,32 +229,10 @@ LRESULT CALLBACK WindowProcedure(_In_ HWND   window,
 
             if (isKeyDown != wasKeyDown)
             {
+                int game_key_code_id = GlobalKeyCodeMap[vkCode];
+                global_shared_data.input.keyboard[game_key_code_id] = isKeyDown;
                 switch (vkCode)
                 {
-                    case 'W':
-                    case VK_UP:
-                    {
-                        global_shared_data.keyboard.key_w = isKeyDown;
-                        break;
-                    }
-                    case 'A':
-                    case VK_LEFT:
-                    {
-                        global_shared_data.keyboard.key_a = isKeyDown;
-                        break;
-                    }
-                    case 'S':
-                    case VK_DOWN:
-                    {
-                        global_shared_data.keyboard.key_s = isKeyDown;
-                        break;
-                    }
-                    case 'D':
-                    case VK_RIGHT:
-                    {
-                        global_shared_data.keyboard.key_d = isKeyDown;
-                        break;
-                    }
                     case 'P':
                     {
                         if(isKeyDown)
@@ -238,13 +241,35 @@ LRESULT CALLBACK WindowProcedure(_In_ HWND   window,
                         }
                         break;
                     }
+                    case VK_ESCAPE:
+                    {
+                        GlobalIsRunning = false;
+                        break;
+                    }
                 }
             }
             break;
         }
         case WM_KILLFOCUS:
         {
-            global_shared_data.keyboard = {};
+            global_shared_data.input = {};
+            break;
+        }
+        case WM_SIZE:
+        {
+            if(wParam != SIZE_MAXIMIZED)
+                break;
+        }
+        case WM_EXITSIZEMOVE:
+        {
+            RECT clientRectangle;
+            GetClientRect(window, &clientRectangle);
+
+            LONG clientWidth  = clientRectangle.right - clientRectangle.left;
+            LONG clientHeight = clientRectangle.bottom - clientRectangle.top;
+            glViewport(0, 0, clientWidth, clientHeight);
+
+            global_shared_data.offscreen = GlobalOffscreenWrapper.offscreen;
             break;
         }
         default:
@@ -254,6 +279,43 @@ LRESULT CALLBACK WindowProcedure(_In_ HWND   window,
         }
     }
     return result;
+}
+
+void InitializeKeyCodeMap()
+{
+    GlobalKeyCodeMap['W'] = KEY_W;
+    GlobalKeyCodeMap['A'] = KEY_A;
+    GlobalKeyCodeMap['S'] = KEY_S;
+    GlobalKeyCodeMap['D'] = KEY_D;
+    GlobalKeyCodeMap[VK_LEFT] = KEY_LEFT;
+    GlobalKeyCodeMap[VK_RIGHT] = KEY_RIGHT;
+    GlobalKeyCodeMap[VK_UP] = KEY_UP;
+    GlobalKeyCodeMap[VK_DOWN] = KEY_DOWN;
+}
+
+BOOL InitializeOpenGL(HDC deviceContext)
+{
+    PIXELFORMATDESCRIPTOR desiredPixelFormat = {};
+    desiredPixelFormat.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+    desiredPixelFormat.nVersion = 1;
+    desiredPixelFormat.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    desiredPixelFormat.iPixelType = PFD_TYPE_RGBA;
+    desiredPixelFormat.cColorBits = 32;
+    desiredPixelFormat.cAlphaBits = 8;
+
+    int suggestedPixelFormatIndex = ChoosePixelFormat(deviceContext, &desiredPixelFormat);
+    PIXELFORMATDESCRIPTOR suggestedPixelFormat;
+    if (!DescribePixelFormat(deviceContext, suggestedPixelFormatIndex, sizeof(PIXELFORMATDESCRIPTOR), &suggestedPixelFormat))
+        return FALSE;
+
+    if (!SetPixelFormat(deviceContext, suggestedPixelFormatIndex, &suggestedPixelFormat))
+        return FALSE;
+
+    HGLRC openGlRenderingContext = wglCreateContext(deviceContext);
+    if(!wglMakeCurrent(deviceContext, openGlRenderingContext))
+        return FALSE;
+
+    return TRUE;
 }
 
 HWND InitializeWindow(HINSTANCE instance)
@@ -268,13 +330,13 @@ HWND InitializeWindow(HINSTANCE instance)
                                                   0, 0, LR_LOADFROMFILE | LR_LOADTRANSPARENT);
     windowClass.hIconSm       = windowClass.hIcon;
     windowClass.hCursor       = LoadCursorW(NULL, MAKEINTRESOURCEW(32512));
-    windowClass.lpszClassName = L"Road Fighter Remake";
+    windowClass.lpszClassName = L"Blobby Volley Remake";
 
     RegisterClassExW(&windowClass);
 
     // TODO: Do we need WS_EX_OVERLAPPEDWINDOW?
     DWORD windowExtendedStyle = WS_EX_OVERLAPPEDWINDOW;
-    DWORD windowStyle = WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX | WS_VISIBLE;
+    DWORD windowStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
 
     RECT clientRectangle = { 0, 0, WINDOW_CLIENT_WIDTH, WINDOW_CLIENT_HEIGHT };
     RECT windowRectangle = clientRectangle;
@@ -293,6 +355,9 @@ HWND InitializeWindow(HINSTANCE instance)
 AudioManager InitializeAudioManager()
 {
         AudioManager result = {};
+
+        if(FAILED(CoInitializeEx(0, COINIT_APARTMENTTHREADED)))
+            return result;
 
         if (FAILED(XAudio2Create(&result.xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR)))
             return result;
@@ -327,6 +392,7 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
     HWND window = InitializeWindow(instance);
     if (window)
     {
+        InitializeKeyCodeMap();
         HDC deviceContext = GetDC(window);
 
         GlobalAudioManager = InitializeAudioManager();
@@ -337,7 +403,7 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
             if (FAILED(GlobalAudioManager.xAudio2->CreateSourceVoice(&SourceVoice, &GlobalAudioManager.waveFormat)))
                 return -1;
 
-            File soundFile = ReadFile(L"sample.wav");
+            File soundFile = DebugReadFile(L"sample.wav");
             if (!soundFile.memory)
                 return -1;
 
@@ -352,38 +418,58 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
             if (FAILED(SourceVoice->SubmitSourceBuffer(&audioBuffer)))
                 return -1;
 
-            if (FAILED(SourceVoice->Start()))
-                return -1;
+            // if (FAILED(SourceVoice->Start()))
+            //    return -1;
 
-            SourceVoice->SetVolume(0.25f);
+            // SourceVoice->SetVolume(0.25f);
         }
 
         if (!InitializeOpenGL(deviceContext))
             return -1;
 
-        OffscreenBufferWrapper offscreenWrapper = ResizeOffscreenBuffer(window);
-        global_shared_data.offscreen = offscreenWrapper.offscreen;
+        ResizeOffscreenBuffer(&GlobalOffscreenWrapper, WINDOW_CLIENT_WIDTH, WINDOW_CLIENT_HEIGHT);
+        global_shared_data.offscreen = GlobalOffscreenWrapper.offscreen;
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
+        glClearColor(0.25f, 0.25f, 0.75f, 1.0f);
+        glMatrixMode(GL_MODELVIEW);
+        float32 orthographic_projection[16] = { 2.0f / 800.0f, 0.0f,           0.0f, 0.0f,
+                                                0.0f,           -2.0f / 600.0f, 0.0f, 0.0f,
+                                                0.0f,           0.0f,           1.0f, 0.0f,
+                                                -1.0f,          1.0f,           0.0f, 1.0f };
+        glLoadMatrixf(orthographic_projection);
+
 #if BUILD_DEBUG
         LPVOID baseAdress = (LPVOID)Terabytes(4);
 #else
         LPVOID baseAdress = (LPVOID)0;
 #endif
-        global_shared_data.game_storage.size = Megabytes(256);
         // TODO: Specify MEM_LARGE_PAGES and enable necessary token privileges, so that allocated pages will be larger than 4 kilobytes.
-        global_shared_data.game_storage.memory = VirtualAlloc(baseAdress, global_shared_data.game_storage.size,
-                                                              MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        global_shared_data.memory.begin = VirtualAlloc(baseAdress, Megabytes(256),
+                                                       MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        global_shared_data.memory.current = global_shared_data.memory.begin;
+        global_shared_data.memory.end = (char8*)global_shared_data.memory.begin + Megabytes(256);
 
-        global_shared_data.platform_read_file = ReadFile;
-        global_shared_data.platform_write_file = WriteFile;
+        global_shared_data.platform_get_file_size_function = GetFileSize;
+        global_shared_data.platform_read_file              = DebugReadFile;
+        global_shared_data.platform_write_file             = WriteFile;
 
         LONG64 perfomanceCounterFrequency = GetCounterFrequency();
-        DOUBLE secondsPerUpdate = 1.0 / 60.0;
+        DOUBLE secondsPerUpdate = 1.0 / 75.0;
 
         LONG64 previousCounter = GetCounter();
         DOUBLE accumulator = 0.0;
 
         // TODO: Launch the game in seperate from window thread, so its update/render function won't freeze after focus lost.
-        GlobalIsRunning = initialize_game(global_shared_data);
+        GlobalIsRunning = initialize_game(&global_shared_data);
         while (GlobalIsRunning)
         {
 #if BUILD_DEBUG
@@ -411,25 +497,29 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
             previousCounter = currentCounter;
             while (accumulator >= secondsPerUpdate)
             {
-                update_game(global_shared_data);
-
+                update_game(&global_shared_data);
+                OutputDebugStringW(L"update\n");
                 accumulator -= secondsPerUpdate;
                 if (accumulator < secondsPerUpdate)
                 {
-                    render_game(global_shared_data);
+                    render_game(&global_shared_data);
+
+                    //glClear(GL_COLOR_BUFFER_BIT);
+                    OutputDebugStringW(L"render\n");
+                    //ProcessRenderCommands(&global_shared_data.render_commands);
+                    glBegin(GL_LINES);
+                    glColor3f(1.0f, 1.0f, 1.0f);
+                    glVertex2f(10.0f,  10.0f);
+                    glVertex2f(0.0f,  111.0f);
+                    glVertex2f(211.0f,  111.0f);
+                    glVertex2f(402.5f,  210.5f);
+                    glEnd();
+                    glFlush();
+
+                    SwapBuffers(deviceContext);
                 }
             }
-            StretchDIBits(deviceContext,
-                          0, 0, WINDOW_CLIENT_WIDTH, WINDOW_CLIENT_HEIGHT,
-                          0, 0, offscreenWrapper.offscreen.width, offscreenWrapper.offscreen.height,
-                          offscreenWrapper.offscreen.memory, &offscreenWrapper.info,
-                          DIB_RGB_COLORS, SRCCOPY);
-#if 0
-            glViewport(0, 0, WINDOW_CLIENT_WIDTH, WINDOW_CLIENT_HEIGHT);
-            glClearColor(1.0f, 0.0f, 1.0, 0.5f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            SwapBuffers(deviceContext);
-#endif
+
             Sleep(1);
         }
     }

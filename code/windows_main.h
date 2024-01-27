@@ -1,22 +1,15 @@
-#if BUILD_DEBUG
 #include "game.h"
-#else
-#include "game.h"
-#endif
 
-#define Kilobytes(value) ((value) * 1024ULL)
-#define Megabytes(value) (Kilobytes(value) * 1024)
-#define Gigabytes(value) (Megabytes(value) * 1024)
-#define Terabytes(value) (Gigabytes(value) * 1024)
+#define BASE_RENDER_RESOLUTION_WIDTH  800
+#define BASE_RENDER_RESOLUTION_HEIGHT 600
 
-#define BASE_RENDER_RESOLUSION_WIDTH  640 / 4
-#define BASE_RENDER_RESOLUSION_HEIGHT 480 / 4
-
-#define WINDOW_CLIENT_WIDTH  640
-#define WINDOW_CLIENT_HEIGHT 480
+#define WINDOW_CLIENT_WIDTH  800
+#define WINDOW_CLIENT_HEIGHT 600
 
 global BOOL GlobalIsRunning;
 global BOOL GlobalIsPause;
+
+global Key_code_id GlobalKeyCodeMap[KEY_COUNT];
 
 global Shared_data global_shared_data;
 
@@ -26,6 +19,8 @@ struct OffscreenBufferWrapper
     OffscreenBuffer offscreen;
     BITMAPINFO      info;
 };
+
+global OffscreenBufferWrapper GlobalOffscreenWrapper;
 
 struct AudioVoice : IXAudio2VoiceCallback
 {
@@ -60,9 +55,9 @@ struct AudioManager
 global AudioManager GlobalAudioManager;
 
 #if BUILD_DEBUG
-typedef bool32 Initialize_game_function(Shared_data shared_data);
-typedef void Update_game_function(Shared_data shared_data);
-typedef void Render_game_function(Shared_data shared_data);
+typedef bool32 Initialize_game_function(Shared_data* shared_data);
+typedef void Update_game_function(Shared_data* shared_data);
+typedef void Render_game_function(Shared_data* shared_data);
 
 global Initialize_game_function* initialize_game;
 global Update_game_function* update_game;
