@@ -498,22 +498,16 @@ int WINAPI wWinMain(_In_     HINSTANCE instance,
             while (accumulator >= secondsPerUpdate)
             {
                 update_game(&global_shared_data);
-                OutputDebugStringW(L"update\n");
+
                 accumulator -= secondsPerUpdate;
                 if (accumulator < secondsPerUpdate)
                 {
                     render_game(&global_shared_data);
 
-                    //glClear(GL_COLOR_BUFFER_BIT);
-                    OutputDebugStringW(L"render\n");
-                    //ProcessRenderCommands(&global_shared_data.render_commands);
-                    glBegin(GL_LINES);
-                    glColor3f(1.0f, 1.0f, 1.0f);
-                    glVertex2f(10.0f,  10.0f);
-                    glVertex2f(0.0f,  111.0f);
-                    glVertex2f(211.0f,  111.0f);
-                    glVertex2f(402.5f,  210.5f);
-                    glEnd();
+                    glClear(GL_COLOR_BUFFER_BIT);
+
+                    ProcessRenderCommands(&global_shared_data.render_commands);
+
                     glFlush();
 
                     SwapBuffers(deviceContext);

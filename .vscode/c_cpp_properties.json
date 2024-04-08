@@ -19,5 +19,6 @@
             "compilerPath": ""
         }
     ],
-    "version": 4
+    "version": 4,
+    "enableConfigurationSquiggles": true
 }

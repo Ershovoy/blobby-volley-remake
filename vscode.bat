@@ -1,2 +1,4 @@
 @echo off
-start code .\
+
+call shell.bat
+call code .\ | exit /b
